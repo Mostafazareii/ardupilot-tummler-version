@@ -8,7 +8,6 @@
 bool ModeAcro::init(bool ignore_checks) {
     // set target altitude to zero for reporting
     position_control->set_pos_target_z_cm(0);
-
     // attitude hold inputs become thrust inputs in acro mode
     // set to neutral to prevent chaotic behavior (esp. roll/pitch)
     sub.set_neutral_controls();
