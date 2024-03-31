@@ -347,6 +347,7 @@
     #define HAL_BARO_ALLOW_INIT_NO_BARO
     #define HAL_MAG_PROBE_LIST HAL_MAG_PROBE1; HAL_MAG_PROBE2
 
+
 #else
     #error "no Linux board subtype set"
 #endif
