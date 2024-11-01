@@ -13,6 +13,7 @@
 #include <AP_ExternalAHRS/AP_ExternalAHRS.h>
 #include <AP_CustomRotations/AP_CustomRotations.h>
 #include <GCS_MAVLink/GCS.h>
+#include <AP_AHRS/AP_AHRS.h>
 
 #include "AP_Compass_config.h"
 
@@ -20,6 +21,7 @@
 #include "AP_Compass_AK8963.h"
 #include "AP_Compass_Backend.h"
 #include "AP_Compass_BMM150.h"
+#include "AP_Compass_BMM350.h"
 #include "AP_Compass_HMC5843.h"
 #include "AP_Compass_IST8308.h"
 #include "AP_Compass_IST8310.h"
@@ -515,7 +517,7 @@ const AP_Param::GroupInfo Compass::var_info[] = {
     // @Param: DISBLMSK
     // @DisplayName: Compass disable driver type mask
     // @Description: This is a bitmask of driver types to disable. If a driver type is set in this mask then that driver will not try to find a sensor at startup
-    // @Bitmask: 0:HMC5883,1:LSM303D,2:AK8963,3:BMM150,4:LSM9DS1,5:LIS3MDL,6:AK09916,7:IST8310,8:ICM20948,9:MMC3416,11:DroneCAN,12:QMC5883,14:MAG3110,15:IST8308,16:RM3100,17:MSP,18:ExternalAHRS
+    // @Bitmask: 0:HMC5883,1:LSM303D,2:AK8963,3:BMM150,4:LSM9DS1,5:LIS3MDL,6:AK09916,7:IST8310,8:ICM20948,9:MMC3416,11:DroneCAN,12:QMC5883,14:MAG3110,15:IST8308,16:RM3100,17:MSP,18:ExternalAHRS,19:MMC5XX3,20:QMC5883P,21:BMM350
     // @User: Advanced
     AP_GROUPINFO("DISBLMSK", 33, Compass, _driver_type_mask, 0),
 
@@ -1313,6 +1315,23 @@ void Compass::_probe_external_i2c_compasses(void)
         }
     }
 #endif // AP_COMPASS_BMM150_ENABLED
+
+#if AP_COMPASS_BMM350_ENABLED
+    // BMM350 on I2C
+    FOREACH_I2C_EXTERNAL(i) {
+        for (uint8_t addr=BMM350_I2C_ADDR_MIN; addr <= BMM350_I2C_ADDR_MAX; addr++) {
+            ADD_BACKEND(DRIVER_BMM350,
+                        AP_Compass_BMM350::probe(GET_I2C_DEVICE(i, addr), true, ROTATION_NONE));
+        }
+    }
+#if !defined(HAL_SKIP_AUTO_INTERNAL_I2C_PROBE)
+    FOREACH_I2C_INTERNAL(i) {
+        for (uint8_t addr=BMM350_I2C_ADDR_MIN; addr <= BMM350_I2C_ADDR_MAX; addr++) {
+            ADD_BACKEND(DRIVER_BMM350, AP_Compass_BMM350::probe(GET_I2C_DEVICE(i, addr), all_external, ROTATION_NONE));
+        }
+    }
+#endif
+#endif // AP_COMPASS_BMM350_ENABLED
 }
 
 /*
@@ -1323,7 +1342,7 @@ void Compass::_detect_backends(void)
 #if AP_COMPASS_EXTERNALAHRS_ENABLED
     const int8_t serial_port = AP::externalAHRS().get_port(AP_ExternalAHRS::AvailableSensor::COMPASS);
     if (serial_port >= 0) {
-        ADD_BACKEND(DRIVER_EXTERNALAHRS, new AP_Compass_ExternalAHRS(serial_port));
+        ADD_BACKEND(DRIVER_EXTERNALAHRS, NEW_NOTHROW AP_Compass_ExternalAHRS(serial_port));
     }
 #endif
     
@@ -1337,7 +1356,7 @@ void Compass::_detect_backends(void)
 #endif
 
 #if AP_COMPASS_SITL_ENABLED && !AP_TEST_DRONECAN_DRIVERS
-    ADD_BACKEND(DRIVER_SITL, new AP_Compass_SITL());
+    ADD_BACKEND(DRIVER_SITL, NEW_NOTHROW AP_Compass_SITL());
 #endif
 
 #if AP_COMPASS_DRONECAN_ENABLED
@@ -1356,7 +1375,7 @@ void Compass::_detect_backends(void)
 #if AP_COMPASS_MSP_ENABLED
     for (uint8_t i=0; i<8; i++) {
         if (msp_instance_mask & (1U<<i)) {
-            ADD_BACKEND(DRIVER_MSP, new AP_Compass_MSP(i));
+            ADD_BACKEND(DRIVER_MSP, NEW_NOTHROW AP_Compass_MSP(i));
         }
     }
 #endif
@@ -1561,7 +1580,7 @@ void Compass::probe_dronecan_compasses(void)
                 }
                 // We have found a replacement mag, let's replace the existing one
                 // with this by setting the priority to zero and calling uavcan probe
-                gcs().send_text(MAV_SEVERITY_ALERT, "Mag: Compass #%d with DEVID %lu replaced", uint8_t(i), (unsigned long)_priority_did_list[i]);
+                GCS_SEND_TEXT(MAV_SEVERITY_ALERT, "Mag: Compass #%d with DEVID %lu replaced", uint8_t(i), (unsigned long)_priority_did_list[i]);
                 _priority_did_stored_list[i].set_and_save(0);
                 _priority_did_list[i] = 0;
 
@@ -1743,7 +1762,7 @@ Compass::read(void)
 #if COMPASS_LEARN_ENABLED
     if (_learn == LEARN_INFLIGHT && !learn_allocated) {
         learn_allocated = true;
-        learn = new CompassLearn(*this);
+        learn = NEW_NOTHROW CompassLearn(*this);
     }
     if (_learn == LEARN_INFLIGHT && learn != nullptr) {
         learn->update();

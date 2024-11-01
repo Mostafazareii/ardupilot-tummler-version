@@ -79,11 +79,12 @@ public:
     // set mount's mode
     bool set_mode(enum MAV_MOUNT_MODE mode);
 
-    // set yaw_lock.  If true, the gimbal's yaw target is maintained in earth-frame meaning it will lock onto an earth-frame heading (e.g. North)
+    // set yaw_lock used in RC_TARGETING mode.  If true, the gimbal's yaw target is maintained in earth-frame meaning it will lock onto an earth-frame heading (e.g. North)
     // If false (aka "follow") the gimbal's yaw is maintained in body-frame meaning it will rotate with the vehicle
     void set_yaw_lock(bool yaw_lock) { _yaw_lock = yaw_lock; }
 
     // set angle target in degrees
+    // roll and pitch are in earth-frame
     // yaw_is_earth_frame (aka yaw_lock) should be true if yaw angle is earth-frame, false if body-frame
     void set_angle_target(float roll_deg, float pitch_deg, float yaw_deg, bool yaw_is_earth_frame);
 
@@ -197,6 +198,14 @@ public:
     // send camera capture status message to GCS
     virtual void send_camera_capture_status(mavlink_channel_t chan) const {}
 
+#if AP_MOUNT_SEND_THERMAL_RANGE_ENABLED
+    // send camera thermal status message to GCS
+    virtual void send_camera_thermal_range(mavlink_channel_t chan) const {}
+#endif
+
+    // change camera settings not normally used by autopilot
+    virtual bool change_setting(CameraSetting setting, float value) { return false; }
+
 #if AP_MOUNT_POI_TO_LATLONALT_ENABLED
     // get poi information.  Returns true on success and fills in gimbal attitude, location and poi location
     bool get_poi(uint8_t instance, Quaternion &quat, Location &loc, Location &poi_loc);
@@ -236,6 +245,20 @@ protected:
         // set roll, pitch, yaw and yaw_is_ef from Vector3f
         void set(const Vector3f& rpy, bool yaw_is_ef_in);
     };
+
+    // options parameter bitmask handling
+    enum class Options : uint8_t {
+        RCTARGETING_LOCK_FROM_PREVMODE = (1U << 0), // RC_TARGETING mode's lock/follow state maintained from previous mode
+    };
+    bool option_set(Options opt) const { return (_params.options.get() & (uint8_t)opt) != 0; }
+
+    // returns true if user has configured a valid roll angle range
+    // allows user to disable roll even on 3-axis gimbal
+    bool roll_range_valid() const { return (_params.roll_angle_min < _params.roll_angle_max); }
+
+    // returns true if user has configured a valid pitch angle range
+    // allows user to disable pitch even on 3-axis gimbal
+    bool pitch_range_valid() const { return (_params.pitch_angle_min < _params.pitch_angle_max); }
 
     // returns true if user has configured a valid yaw angle range
     // allows user to disable yaw even on 3-axis gimbal
@@ -292,7 +315,7 @@ protected:
     uint8_t     _instance;  // this instance's number
 
     MAV_MOUNT_MODE  _mode;          // current mode (see MAV_MOUNT_MODE enum)
-    bool _yaw_lock;                 // True if the gimbal's yaw target is maintained in earth-frame, if false (aka "follow") it is maintained in body-frame
+    bool _yaw_lock;                 // yaw_lock used in RC_TARGETING mode. True if the gimbal's yaw target is maintained in earth-frame, if false (aka "follow") it is maintained in body-frame
 
     // structure for MAVLink Targeting angle and rate targets
     struct {
@@ -323,6 +346,7 @@ protected:
 
     // structure holding the last RC inputs
     struct {
+        bool    initialised;
         int16_t roll_in;
         int16_t pitch_in;
         int16_t yaw_in;

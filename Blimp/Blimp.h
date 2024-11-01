@@ -168,7 +168,6 @@ private:
     // There are multiple states defined such as STABILIZE, ACRO,
     Mode::Number control_mode;
     ModeReason control_mode_reason = ModeReason::UNKNOWN;
-    Mode::Number prev_control_mode;
 
     RCMapper rcmap;
 
@@ -310,9 +309,8 @@ private:
     // commands.cpp
     void update_home_from_EKF();
     void set_home_to_current_location_inflight();
-    bool set_home_to_current_location(bool lock) WARN_IF_UNUSED;
-    bool set_home(const Location& loc, bool lock) WARN_IF_UNUSED;
-    bool far_from_EKF_origin(const Location& loc);
+    bool set_home_to_current_location(bool lock) override WARN_IF_UNUSED;
+    bool set_home(const Location& loc, bool lock) override WARN_IF_UNUSED;
 
     // ekf_check.cpp
     void ekf_check();
